@@ -146,7 +146,7 @@ def add_parser():
                     action='store_true')
     parser.add_argument('-p', "--psf_stars", help = "Minimum number of psf stars required to keep a visit. Default is 1",
                         nargs='?', type = int, const = 1, default = 1)
-
+    parser.add_argument('-o', "--output_directory", help = "main save directory", type = str, = 1, default = "/data1/isaccheo")
     args = parser.parse_args()
 
     return args
@@ -226,21 +226,16 @@ def extraction_routine(args, tract, patch, filename, savedir):
 
 def main():
     today = datetime.date.today().isoformat()
-    main_save_dir = "/data1/isaccheo"
     args = add_parser()
     if args.variance:
-        savedir = os.path.join(main_save_dir, "standard_features", f"variance_{today}")
+        savedir = os.path.join(args.output_directory, "standard_features", f"variance_{today}")
     else:
-        savedir = os.path.join(main_save_dir, "standard_features", today)
+        savedir = os.path.join(args.output_directory, "standard_features", today)
     if not os.path.isdir(savedir):
         os.makedirs(savedir)
 
-
-    #available_patches = qlib.query_available_patches()
-    #for patch in available_patches:
     available_tracts_patches = qlib.query_available_tracts_and_patches()
     for tract, patch in available_tracts_patches:
-        #filename = f"patch_{patch}"
         filename = f"tract_{tract}_patch_{patch}"
         tic = time.perf_counter()
         extraction_routine(args, tract, patch, filename, savedir)
