@@ -100,7 +100,6 @@ def query_force_photometry_without_coadd(snr=5, tract=9813, patch=23, band=None,
     if patch is not None:
         if isinstance(patch, (list, tuple)):
             placeholders = []
-            params = []
             for t, p in zip(tract, patch):
                 placeholders.append("(?, ?)")
                 params.append(t)
@@ -172,7 +171,6 @@ def query_force_photometry_with_coadd(snr = 5, tract = 9813, patch = 23, max_row
     if patch is not None:
         if isinstance(patch, (list, tuple)):
             placeholders = []
-            params = []
             for t, p in zip(tract, patch):
                 placeholders.append("(?, ?)")
                 params.append(t)

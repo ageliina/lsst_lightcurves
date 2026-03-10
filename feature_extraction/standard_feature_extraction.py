@@ -146,7 +146,7 @@ def add_parser():
                     action='store_true')
     parser.add_argument('-p', "--psf_stars", help = "Minimum number of psf stars required to keep a visit. Default is 1",
                         nargs='?', type = int, const = 1, default = 1)
-    parser.add_argument('-o', "--output_directory", help = "main save directory", type = str, = 1, default = "/data1/isaccheo")
+    parser.add_argument('-o', "--output_directory", help = "main save directory", type = str, default = "/data1/isaccheo")
     args = parser.parse_args()
 
     return args
