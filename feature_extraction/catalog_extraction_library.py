@@ -54,7 +54,7 @@ def add_coadd_flux_to_difference(df, SNR_minimum = 5):
             new_df.loc[select, f"psfFlux_{band}"] = np.nan
     return new_df
 
- 
+
 def convert_to_mag(df):
     """converts fluxes to magnitudes for all bands"""
     new_df = df.copy()
@@ -69,14 +69,14 @@ def convert_to_mag(df):
     return new_df
 
 
-def read_forced_photometry(patch = 23, SNR_minimum = 5, coadd = False, difference_flux = False,
+def read_forced_photometry(tract = 9813, patch = 23, SNR_minimum = 5, coadd = False, difference_flux = False,
                            npsf_star = 1):
-    
-    forced_df = qlib.query_force_photometry(patch = patch, snr = SNR_minimum, coadd = coadd, 
+
+    forced_df = qlib.query_force_photometry(tract = tract, patch = patch, snr = SNR_minimum, coadd = coadd,
                                             difference_flux = difference_flux, npsf_star = npsf_star)
-    
+
     fdfs = [group_df for _, group_df in forced_df.groupby('objectId')] #forced table is splitted in many tables according to objectId
-    return fdfs 
+    return fdfs
 
 
 def mag_to_flux(mag,mag_err, luptitudes = False, band = None):
@@ -93,10 +93,10 @@ def mag_to_flux(mag,mag_err, luptitudes = False, band = None):
         ab2sdss_zp = dict(zip('ugriz', ab2sdss_zp))
         a = 2.5/np.log(10)
         # convert from sdss mag to flux
-        flux = np.sinh(mag*np.log(10)/(-2.5) - 
+        flux = np.sinh(mag*np.log(10)/(-2.5) -
                    np.log(b[f'{band}']))*2*b[f'{band}']*1e9*3631/ab2sdss_zp[f'{band}']
         flux_err = np.abs((flux*mag_err/a)/np.tanh(-mag/a - np.log(b[f'{band}'])))
-    
+
     else:
         flux = 10**(-(mag/2.5))*1e9*3631
         flux_err = mag_err*flux*np.log(10)/2.5
@@ -136,7 +136,7 @@ def get_observational_errors_function(band, difference_flux = False, path = "../
         fname = "observed_variance.dat"
     observed_variance = pd.read_csv(os.path.join(path,fname), sep =" ")
     select = np.isfinite(observed_variance[f"{band}_error"])
-    f = interp1d(observed_variance.loc[select, "magnitude"], observed_variance.loc[select,f"{band}_error"], 
+    f = interp1d(observed_variance.loc[select, "magnitude"], observed_variance.loc[select,f"{band}_error"],
                  fill_value = "extrapolate")
     return f
 

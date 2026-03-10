@@ -22,6 +22,13 @@ def query_available_tracts():
     tracts = query_agile(query)["tract"].to_list()
     return tracts
 
+def query_available_tracts_and_patches():
+    query = """SELECT DISTINCT tract, patch FROM Object ORDER BY tract, patch"""
+    result = query_agile(query)
+    tracts = result["tract"].to_list()
+    patches = result["patch"].to_list()
+    return list(zip(tracts, patches))
+
 def get_table_names():
     conn = sqlite3.connect(database_path)
     cursor = conn.cursor()
@@ -31,7 +38,7 @@ def get_table_names():
 
 def query_coadd_photometry(keep_psf = True, patch = query_available_patches(),
                            keep_cmodel = True, keep_extendedness = True, max_rows = 1e10):
-    
+
     column_to_query = ["objectId", "refExtendedness", "detect_isPrimary"]
     for band in "ugrizy":
         temp = []
@@ -39,7 +46,7 @@ def query_coadd_photometry(keep_psf = True, patch = query_available_patches(),
             temp.extend([f"{band}_psfFlux", f"{band}_psfFluxErr", f"{band}_psfFlux_flag" ])
         if keep_cmodel:
             temp.extend([f"{band}_cModelFlux", f"{band}_cModelFluxErr", f"{band}_cModelFluxErr"])
-        if keep_extendedness: 
+        if keep_extendedness:
             temp.extend([f"{band}_extendedness", f"{band}_extendedness_flag"])
         column_to_query.extend(temp)
     column_to_query = ", ".join(column_to_query)
@@ -62,11 +69,11 @@ def query_coadd_photometry(keep_psf = True, patch = query_available_patches(),
                 """
         params = [patch, max_rows]
 
-    table = query_agile(query, params=params)  
-    return table  
+    table = query_agile(query, params=params)
+    return table
 
 
-def query_force_photometry_without_coadd(snr=5, patch=23, band=None, max_rows=None,
+def query_force_photometry_without_coadd(snr=5, tract=9813, patch=23, band=None, max_rows=None,
                                          difference_flux = False, npsf_star = 1):
     if not difference_flux:
         query = """
@@ -75,28 +82,34 @@ def query_force_photometry_without_coadd(snr=5, patch=23, band=None, max_rows=No
         JOIN CcdVisit AS ccd USING (ccdVisitId)
         WHERE (f.psfFlux >= ? * f.psfFluxErr) AND f.psfFlux > 0
         AND ccd.nPsfStar >= ?
-        AND f.detect_isPrimary = 1 
+        AND f.detect_isPrimary = 1
         """
         params = [snr, npsf_star]
     else:
         query = """
-        SELECT f.objectId, f.band, ccd.expMidptMJD, f.psfDiffFlux AS psfFlux, 
+        SELECT f.objectId, f.band, ccd.expMidptMJD, f.psfDiffFlux AS psfFlux,
         f.psfDiffFluxErr AS psfFluxErr
         FROM ForcedSource AS f
         JOIN CcdVisit AS ccd USING (ccdVisitId)
-        WHERE f.psfDiffFlux IS NOT NULL AND f.psfDiffFluxErr IS NOT NULL 
+        WHERE f.psfDiffFlux IS NOT NULL AND f.psfDiffFluxErr IS NOT NULL
         AND ccd.nPsfStar >= ?
-        AND f.detect_isPrimary = 1 
+        AND f.detect_isPrimary = 1
         """
         params = [npsf_star]
 
     if patch is not None:
         if isinstance(patch, (list, tuple)):
-            placeholders = ",".join("?" for _ in patch)
-            query += f" AND f.patch IN ({placeholders})"
-            params.extend(patch)
+            placeholders = []
+            params = []
+            for t, p in zip(tract, patch):
+                placeholders.append("(?, ?)")
+                params.append(t)
+                params.append(p)
+            query_placeholders = ", ".join(placeholders)
+            query += f" AND (f.tract, f.patch) IN ({query_placeholders})"
         else:
-            query += " AND f.patch = ?"
+            query += " AND (f.tract = ? AND f.patch = ?)"
+            params.append(tract)
             params.append(patch)
 
     if band is not None:
@@ -112,12 +125,12 @@ def query_force_photometry_without_coadd(snr=5, patch=23, band=None, max_rows=No
         query += " LIMIT ?"
         params.append(max(1, int(max_rows)))
 
-    table = query_agile(query, params=params)  
+    table = query_agile(query, params=params)
     return table
 
 
 
-def query_force_photometry_with_coadd(snr = 5, patch = 23, max_rows = None, band = None,
+def query_force_photometry_with_coadd(snr = 5, tract = 9813, patch = 23, max_rows = None, band = None,
                                        difference_flux = False, npsf_star = 1):
     if not difference_flux:
         query = """
@@ -133,13 +146,13 @@ def query_force_photometry_with_coadd(snr = 5, patch = 23, max_rows = None, band
             JOIN Object as o USING (objectId)
             WHERE (f.psfFlux >= ? * f.psfFluxErr) AND f.psfFlux > 0
             AND ccd.nPsfStar >= ?
-            AND f.detect_isPrimary = 1 
+            AND f.detect_isPrimary = 1
             """
         params = [snr, npsf_star]
 
-    else: 
+    else:
         query = """
-            SELECT f.objectId, f.band, ccd.expMidptMJD, f.psfDiffFlux AS psfFlux, 
+            SELECT f.objectId, f.band, ccd.expMidptMJD, f.psfDiffFlux AS psfFlux,
             psfDiffFluxErr AS psfFluxErr,
             o.u_psfFlux AS u_coadd,
             o.g_psfFlux AS g_coadd,
@@ -150,19 +163,25 @@ def query_force_photometry_with_coadd(snr = 5, patch = 23, max_rows = None, band
             FROM ForcedSource as f
             JOIN CcdVisit AS ccd USING (ccdVisitId)
             JOIN Object AS o USING (objectId)
-            WHERE f.psfDiffFlux IS NOT NULL AND f.psfDiffFluxErr IS NOT NULL 
+            WHERE f.psfDiffFlux IS NOT NULL AND f.psfDiffFluxErr IS NOT NULL
             AND ccd.nPsfStar >= ?
-            AND f.detect_isPrimary = 1 
+            AND f.detect_isPrimary = 1
             """
         params = [npsf_star]
-    
+
     if patch is not None:
         if isinstance(patch, (list, tuple)):
-            placeholders = ",".join("?" for _ in patch)
-            query += f" AND f.patch IN ({placeholders})"
-            params.extend(patch)
+            placeholders = []
+            params = []
+            for t, p in zip(tract, patch):
+                placeholders.append("(?, ?)")
+                params.append(t)
+                params.append(p)
+            query_placeholders = ", ".join(placeholders)
+            query += f" AND (f.tract, f.patch) IN ({query_placeholders})"
         else:
-            query += " AND f.patch = ?"
+            query += " AND (f.tract = ? AND f.patch = ?)"
+            params.append(tract)
             params.append(patch)
 
     if band is not None:
@@ -178,31 +197,31 @@ def query_force_photometry_with_coadd(snr = 5, patch = 23, max_rows = None, band
         query += " LIMIT ?"
         params.append(max(1, int(max_rows)))
 
-    table = query_agile(query, params=params)  
+    table = query_agile(query, params=params)
     return table
 
 
-def query_force_photometry(snr = 5, patch = 23, max_rows = None, band = None,
+def query_force_photometry(snr = 5, tract = 9813, patch = 23, max_rows = None, band = None,
                             coadd = False, difference_flux = False, npsf_star = 1):
-    
+
     if coadd:
-        table = query_force_photometry_with_coadd(snr=snr, patch=patch, max_rows = max_rows,
+        table = query_force_photometry_with_coadd(snr=snr, tract=tract, patch=patch, max_rows = max_rows,
                                                   band = band, difference_flux=difference_flux,
                                                   npsf_star = npsf_star)
     else:
-        table = query_force_photometry_without_coadd(snr=snr, patch=patch, max_rows = max_rows,
+        table = query_force_photometry_without_coadd(snr=snr, tract=tract, patch=patch, max_rows = max_rows,
                                                   band = band, difference_flux=difference_flux,
                                                   npsf_star = npsf_star)
-        
+
     return table
 
 
-def query_truth_table(max_rows = None, 
-                      coord_cut = True, 
+def query_truth_table(max_rows = None,
+                      coord_cut = True,
                       columns = ["ID", "RA", "DEC", "Z", "M", "is_optical_type2", "is_agn",
                       "[lsst-u_total]", "[lsst-g_total]","[lsst-r_total]", "[lsst-i_total]",
                       "[lsst-z_total]", "[lsst-y_total]"]):
-    
+
     if isinstance(columns, str):
         if (columns.casefold() == "all") or (columns == "*"):
             columns = "Truth.*"
@@ -219,7 +238,7 @@ def query_truth_table(max_rows = None,
            JOIN MatchesTruth AS m ON Truth.ID=m.match_id
            """
     params = None
-    
+
     if coord_cut:
         query += " WHERE Truth.RA > 149.31 AND Truth.DEC < 150.81"
         query += " AND Truth.DEC > 1.45 AND  Truth.DEC < 3.01"
@@ -238,19 +257,19 @@ def query_lightcurve(objectid, snr=5, band=None, max_rows=None,
         FROM ForcedSource AS f
         JOIN CcdVisit AS ccd USING (ccdVisitId)
         WHERE (f.psfFlux >= ? * f.psfFluxErr) AND f.psfFlux > 0
-        AND f.detect_isPrimary = 1 
+        AND f.detect_isPrimary = 1
         AND f.objectId = ?
         AND ccd.nPsfStar >= ?
         """
         params = [snr, int(objectid), npsfstar]
     else:
         query = """
-        SELECT f.objectId, f.band, ccd.expMidptMJD, f.psfDiffFlux AS psfFlux, 
+        SELECT f.objectId, f.band, ccd.expMidptMJD, f.psfDiffFlux AS psfFlux,
         f.psfDiffFluxErr AS psfFluxErr
         FROM ForcedSource AS f
         JOIN CcdVisit AS ccd USING (ccdVisitId)
-        WHERE f.psfDiffFlux IS NOT NULL AND f.psfDiffFluxErr IS NOT NULL 
-        AND f.detect_isPrimary = 1 
+        WHERE f.psfDiffFlux IS NOT NULL AND f.psfDiffFluxErr IS NOT NULL
+        AND f.detect_isPrimary = 1
         AND f.objectId = ?
         AND ccd.nPsfStar >= ?
         """
@@ -269,6 +288,5 @@ def query_lightcurve(objectid, snr=5, band=None, max_rows=None,
         query += " LIMIT ?"
         params.append(max(1, int(max_rows)))
 
-    table = query_agile(query, params=params)  
+    table = query_agile(query, params=params)
     return table
-
